@@ -42,9 +42,9 @@ Jev is called once per request and once per incident, not every simulation tick.
 
 | Question | Type | Options |
 |---|---|---|
-| `priority` | Choice | `stat`, `urgent`, `routine`, `visitor` |
-| `load` | Choice | `bed`, `wheelchair`, `cart`, `walking` |
-| `exclusive_car` | Noul | probability the trip needs an empty car |
+| `priority` | Multiple choice | `stat`, `urgent`, `routine`, `visitor` |
+| `load` | Multiple choice | `bed`, `wheelchair`, `cart`, `walking` |
+| `exclusive_car` | Yes/no | probability the trip needs an empty car |
 
 Each option has a written definition in the question, and that is where the domain knowledge lives. All three questions go in a single request because Jev evaluates them in parallel.
 
@@ -57,7 +57,7 @@ Each option has a written definition in the question, and that is where the doma
 
 ### Event questions and responses
 
-| Event type (Choice) | Jev-side response |
+| Event type (multiple choice) | Jev-side response |
 |---|---|
 | `car_fault` + car | Car only takes routine traffic |
 | `priority_transport` + floor | Hold the nearest empty car at that floor |

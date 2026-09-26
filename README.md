@@ -20,9 +20,9 @@ Every request arrives as a free-text note, e.g. *"Bed transport ER to ICU, pt in
 
 | Question | Type | Answers |
 |---|---|---|
-| How time-critical is this trip? | Choice | `stat` · `urgent` · `routine` · `visitor` |
-| What will occupy the elevator? | Choice | `bed` · `wheelchair` · `cart` · `walking` |
-| Does this trip need a car with no other passengers? | Noul (yes/no) | probability 0–1 |
+| How time-critical is this trip? | Multiple choice | `stat` · `urgent` · `routine` · `visitor` |
+| What will occupy the elevator? | Multiple choice | `bed` · `wheelchair` · `cart` · `walking` |
+| Does this trip need a car with no other passengers? | Yes/no | probability of "yes", 0–1 |
 
 Example answer: `stat (0.99) · bed (1.00) · own car 0.90`, in ~120 ms.
 
