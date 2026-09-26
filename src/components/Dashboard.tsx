@@ -153,6 +153,8 @@ export function Dashboard() {
 
       <EventBox onSend={sendEvent} last={lastEvent} />
 
+      <Legend />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 flex flex-col gap-3">
           <PanelHeader title="Without Jev" subtitle="Only knows which floor to go to" />
@@ -187,8 +189,6 @@ export function Dashboard() {
           />
         </section>
       </div>
-
-      <Legend />
     </div>
   );
 }
@@ -369,16 +369,46 @@ function Legend() {
     visitor: "Visitor",
   };
   return (
-    <footer className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-zinc-400">
-      <span>Dots are people waiting. Colors show their real urgency; you can see it, the left side can&apos;t. Cars take the color of their most urgent rider:</span>
-      {(Object.keys(PRIORITY_COLOR) as (keyof typeof PRIORITY_COLOR)[]).map((k) => (
-        <span key={k} className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: PRIORITY_COLOR[k] }} />
-          {labels[k]}
-        </span>
-      ))}
-      <span>White outline: car reserved for one patient</span>
-      <span className="text-yellow-400">Dashed yellow: faulty doors</span>
-    </footer>
+    <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-zinc-300">
+      <div className="flex items-center gap-3">
+        <span className="text-zinc-500">Person waiting:</span>
+        {(Object.keys(PRIORITY_COLOR) as (keyof typeof PRIORITY_COLOR)[]).map((k) => (
+          <span key={k} className="flex items-center gap-1.5">
+            <span className="inline-block h-3 w-3 rounded-full" style={{ background: PRIORITY_COLOR[k] }} />
+            {labels[k]}
+          </span>
+        ))}
+      </div>
+      <div className="flex items-center gap-4">
+        <span className="text-zinc-500">Elevator:</span>
+        <CarIcon fill={PRIORITY_COLOR.stat} label="Carrying an emergency" />
+        <CarIcon fill="#3f3f46" outline="#fafafa" label="Reserved for one patient" />
+        <CarIcon fill="#3f3f46" outline="#facc15" dashed label="Faulty doors" />
+      </div>
+      <span className="text-xs text-zinc-500 basis-full">
+        Only you can see the colors. The left side treats every dot the same; the right side learns them from Jev.
+      </span>
+    </section>
+  );
+}
+
+function CarIcon({ fill, outline, dashed, label }: { fill: string; outline?: string; dashed?: boolean; label: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <svg width="22" height="16" viewBox="0 0 22 16" aria-hidden>
+        <rect
+          x="1"
+          y="1"
+          width="20"
+          height="14"
+          rx="3"
+          fill={fill}
+          stroke={outline ?? "none"}
+          strokeWidth={outline ? 2 : 0}
+          strokeDasharray={dashed ? "3 2" : undefined}
+        />
+      </svg>
+      {label}
+    </span>
   );
 }
