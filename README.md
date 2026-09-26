@@ -1,4 +1,4 @@
-# Jev Elevator Dispatch
+# Elevator Sense
 
 **Does a fast "understanding" model help inside a control loop?** An experiment built at JEVATHON (Jev Hackathon SF, Sept 26 2026).
 

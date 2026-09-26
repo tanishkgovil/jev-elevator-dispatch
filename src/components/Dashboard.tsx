@@ -116,9 +116,10 @@ export function Dashboard() {
     <div className="mx-auto w-full max-w-[1280px] px-4 py-5 flex flex-col gap-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Hospital elevators, with and without Jev</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Elevator Sense</h1>
           <p className="text-sm text-zinc-400">
-            Same hospital, same requests, same dispatch algorithm. On the right, Jev reads each request first.
+            Hospital elevators with and without Jev: same hospital, same requests, same dispatch algorithm. On the
+            right, Jev reads each request first.
           </p>
         </div>
         <div className="flex items-center gap-2">
