@@ -5,10 +5,10 @@ import { interpretRequest, type ElevatorRequest } from "../src/lib/jev/interpret
 const SAMPLES: (ElevatorRequest & { expect: string })[] = [
   { from: 1, to: 4, note: "Bed transport ER to ICU, pt intubated, need to go NOW", expect: "stat/bed/excl" },
   { from: 6, to: 3, note: "code blue team heading up to OR 2", expect: "stat/walking/excl" },
-  { from: 7, to: 2, note: "wheelchair pt for scheduled CT, on contact precautions", expect: "urgent/wheelchair/isolation" },
-  { from: 0, to: 3, note: "sterile instrument trays for OR restock", expect: "routine/cart/sterile" },
-  { from: 6, to: 0, note: "dirty linen cart to laundry", expect: "routine/cart/soiled" },
-  { from: 4, to: 0, note: "morgue transport, pt expired 0300", expect: "?/bed/discretion" },
+  { from: 7, to: 2, note: "wheelchair pt for scheduled CT, on contact precautions", expect: "urgent/wheelchair" },
+  { from: 0, to: 3, note: "sterile instrument trays for OR restock", expect: "routine/cart" },
+  { from: 6, to: 0, note: "dirty linen cart to laundry", expect: "routine/cart" },
+  { from: 4, to: 0, note: "morgue transport, pt expired 0300", expect: "routine/bed/excl" },
   { from: 1, to: 9, note: "family of 4 going to the cafeteria", expect: "visitor/walking" },
   { from: 5, to: 2, note: "stat troponin sample to lab", expect: "urgent/walking" },
 ];
@@ -23,7 +23,7 @@ async function main() {
     console.log(
       `${r.latencyMs.toFixed(0).padStart(5)}ms  ${s.note}\n` +
         `         priority=${r.priority} (${r.priorityConfidence.toFixed(2)})  load=${r.load} (${r.loadConfidence.toFixed(2)})  ` +
-        `infection=${r.infection} (${r.infectionConfidence.toFixed(2)})  exclusive=${r.exclusiveCar.toFixed(2)}  discretion=${r.discretion.toFixed(2)}\n` +
+        `exclusive=${r.exclusiveCar.toFixed(2)}\n` +
         `         expected: ${s.expect}\n`,
     );
   }

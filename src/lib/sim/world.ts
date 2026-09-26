@@ -72,15 +72,13 @@ export class World {
           truth: {
             priority: visitor ? "visitor" : "routine",
             load: "walking",
-            infection: "none",
-            discretion: false,
             units: visitor ? 3 : 1,
           },
         });
       }
     } else if (interp.type === "priority_transport") {
       const floor = interp.floor ?? 1;
-      const truth: Truth = { priority: "stat", load: "bed", infection: "none", discretion: false, units: 10 };
+      const truth: Truth = { priority: "stat", load: "bed", units: 10 };
       this.schedule.push({
         id: this.nextId++,
         at: this.now + 45,

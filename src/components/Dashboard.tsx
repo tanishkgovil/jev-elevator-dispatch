@@ -9,14 +9,16 @@ import { World } from "@/lib/sim/world";
 import { Building, PRIORITY_COLOR } from "./Building";
 
 const STEP = 0.25; // sim seconds per engine step
+const MIN_REQUESTS = 60; // below this, the comparison is noise
 const CLIENT_TIMEOUT_MS = 4000; // past this, dispatch without Jev's reading
-const JEV_PRICE_PER_TOKEN = 0.042 / 1_000_000;
-const PRESETS = [
-  "Trauma incoming to the ED in 5 minutes",
-  "Car C door keeps sticking",
-  "Visiting hours just started",
-  "Shift change on the maternity ward in 10 min",
-];
+const PRESETS = ["Trauma incoming to the ED in 5 minutes", "Car C door keeps sticking", "Visiting hours just started"];
+
+const EVENT_LABEL: Record<EventInterpretation["type"], string> = {
+  surge: "Crowd coming",
+  car_fault: "Faulty elevator",
+  priority_transport: "Emergency incoming",
+  ignore: "Not relevant to elevators",
+};
 
 async function interpretViaApi(a: Arrival): Promise<RequestInterpretation> {
   const res = await fetch("/api/interpret", {
@@ -40,17 +42,19 @@ const clock = (s: number) =>
     .toString()
     .padStart(2, "0")}`;
 
+type EventLogEntry = { text: string; at: number; interp?: EventInterpretation; error?: boolean };
+
 export function Dashboard() {
-  const worldRef = useRef<World | null>(null);
+  // The world is mutable and mutated by the loop; `frame` re-renders to show it.
+  const [world, setWorld] = useState(makeWorld);
+  const worldRef = useRef(world);
   const [, setFrame] = useState(0);
   const [running, setRunning] = useState(false);
   const [speed, setSpeed] = useState(10);
-  const [events, setEvents] = useState<{ text: string; at: number; interp?: EventInterpretation; error?: string }[]>([]);
+  const [lastEvent, setLastEvent] = useState<EventLogEntry | null>(null);
 
-  worldRef.current ??= makeWorld();
-  const world = worldRef.current;
   useEffect(() => {
-    if (process.env.NODE_ENV === "development") (window as unknown as { __world?: World }).__world = world;
+    worldRef.current = world;
   }, [world]);
 
   useEffect(() => {
@@ -64,7 +68,7 @@ export function Dashboard() {
       carry += (Math.min(t - last, 250) / 1000) * speed;
       last = t;
       while (carry >= STEP) {
-        worldRef.current!.step(STEP);
+        world.step(STEP);
         carry -= STEP;
       }
       if (t - lastPaint > 90) {
@@ -75,19 +79,18 @@ export function Dashboard() {
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [running, speed]);
+  }, [running, speed, world]);
 
   const reset = () => {
-    worldRef.current = makeWorld();
-    setEvents([]);
+    setWorld(makeWorld());
+    setLastEvent(null);
     setRunning(false);
-    setFrame((f) => f + 1);
   };
 
   const sendEvent = useCallback(async (text: string) => {
-    const w = worldRef.current!;
-    const at = w.now;
-    setEvents((es) => [{ text, at }, ...es]);
+    const w = worldRef.current;
+    const entry: EventLogEntry = { text, at: w.now };
+    setLastEvent(entry);
     try {
       const res = await fetch("/api/event", {
         method: "POST",
@@ -99,9 +102,9 @@ export function Dashboard() {
       if (worldRef.current !== w) return; // reset while in flight
       w.applyEvent(interp);
       for (const c of w.columns) c.applyPolicy(interp, text);
-      setEvents((es) => es.map((e) => (e.text === text && e.at === at ? { ...e, interp } : e)));
-    } catch (err) {
-      setEvents((es) => es.map((e) => (e.text === text && e.at === at ? { ...e, error: String(err) } : e)));
+      setLastEvent((e) => (e === entry ? { ...entry, interp } : e));
+    } catch {
+      setLastEvent((e) => (e === entry ? { ...entry, error: true } : e));
     }
   }, []);
 
@@ -110,16 +113,18 @@ export function Dashboard() {
   const mj = jev.metrics();
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-4 py-5 flex flex-col gap-4">
+    <div className="mx-auto w-full max-w-[1280px] px-4 py-5 flex flex-col gap-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Switchboard</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Hospital elevators, with and without Jev</h1>
           <p className="text-sm text-zinc-400">
-            Hospital elevator dispatch · same building, same traffic · the only difference is who understands the requests
+            Same hospital, same requests, same dispatch algorithm. On the right, Jev reads each request first.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="font-mono text-lg tabular-nums text-zinc-300 mr-2">{clock(world.now)}</span>
+          <span className="font-mono text-lg tabular-nums text-zinc-300 mr-1" title="Simulated time">
+            {clock(world.now)}
+          </span>
           <button
             onClick={() => setRunning((r) => !r)}
             className="rounded-md bg-emerald-600 hover:bg-emerald-500 px-4 py-1.5 text-sm font-medium"
@@ -144,24 +149,43 @@ export function Dashboard() {
         </div>
       </header>
 
-      <ChaosBox onSend={sendEvent} events={events} />
-
       <Scoreboard baseline={mb} jev={mj} />
 
+      <EventBox onSend={sendEvent} last={lastEvent} />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Panel
-          title="Baseline dispatcher"
-          subtitle="Conventional optimizer: ETA + stops. Sees floors, not meaning."
-          column={baseline}
-          metrics={mb}
-        />
-        <Panel
-          title="Jev dispatcher"
-          subtitle="Same optimizer + Jev reading every request and event."
-          column={jev}
-          metrics={mj}
-          accent
-        />
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 flex flex-col gap-3">
+          <PanelHeader title="Without Jev" subtitle="Only knows which floor to go to" />
+          <Building column={baseline} />
+          <Feed
+            title="Problems"
+            empty="None yet"
+            items={baseline.log.filter((d) => d.kind === "wasted").slice(0, 5)}
+            render={(d) => (
+              <span className="text-red-300">
+                ✗ {d.text.replace(/ arrived too full: "(.*)" left behind/, " arrived too full — \"$1\" left behind")}
+              </span>
+            )}
+          />
+        </section>
+
+        <section className="rounded-xl border border-emerald-800 bg-emerald-950/20 p-4 flex flex-col gap-3">
+          <PanelHeader
+            title="With Jev"
+            subtitle={
+              mj.latencyP50 > 0
+                ? `Jev reads every request · ~${mj.latencyP50.toFixed(0)} ms each`
+                : "Jev reads every request"
+            }
+          />
+          <Building column={jev} />
+          <Feed
+            title="What Jev read"
+            empty="Press Start"
+            items={jev.log.filter((d) => d.kind === "assign").slice(0, 5)}
+            render={(d) => <JevRead d={d} />}
+          />
+        </section>
       </div>
 
       <Legend />
@@ -169,13 +193,68 @@ export function Dashboard() {
   );
 }
 
-function ChaosBox({
-  onSend,
-  events,
-}: {
-  onSend: (text: string) => void;
-  events: { text: string; at: number; interp?: EventInterpretation; error?: string }[];
-}) {
+function PanelHeader({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold">{title}</h2>
+      <p className="text-sm text-zinc-400">{subtitle}</p>
+    </div>
+  );
+}
+
+const CARDS: { key: keyof Metrics; label: string; unit: string }[] = [
+  { key: "statWait", label: "Emergency patients wait", unit: "s" },
+  { key: "bedWait", label: "Patient beds wait", unit: "s" },
+  { key: "avgWait", label: "Everyone waits (avg)", unit: "s" },
+  { key: "wastedTrips", label: "Trips where the bed didn't fit", unit: "" },
+];
+
+function Scoreboard({ baseline, jev }: { baseline: Metrics; jev: Metrics }) {
+  const settled = jev.requests >= MIN_REQUESTS;
+  return (
+    <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {CARDS.map((c) => {
+        const b = baseline[c.key];
+        const j = jev[c.key];
+        const change = b > 0 ? Math.round(((b - j) / b) * 100) : null;
+        return (
+          <div key={c.key} className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3">
+            <div className="text-sm text-zinc-300">{c.label}</div>
+            <div className="mt-2 grid grid-cols-2 gap-2 font-mono tabular-nums">
+              <div>
+                <div className="text-[11px] text-zinc-500">Without Jev</div>
+                <div className="text-xl text-zinc-300">
+                  {Math.round(b)}
+                  {c.unit}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] text-emerald-400">With Jev</div>
+                <div className="text-xl text-zinc-50">
+                  {Math.round(j)}
+                  {c.unit}
+                </div>
+              </div>
+            </div>
+            {settled ? (
+              <div
+                className={`mt-1 text-xs ${change === null ? "text-zinc-500" : change >= 0 ? "text-emerald-400" : "text-red-400"}`}
+              >
+                {change === null ? "—" : change >= 0 ? `${change}% less with Jev` : `${-change}% more with Jev`}
+              </div>
+            ) : (
+              <div className="mt-1 text-xs text-zinc-500">
+                Gathering data… {jev.requests}/{MIN_REQUESTS} requests
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+function EventBox({ onSend, last }: { onSend: (text: string) => void; last: EventLogEntry | null }) {
   const [text, setText] = useState("");
   const submit = () => {
     const t = text.trim();
@@ -183,22 +262,22 @@ function ChaosBox({
     onSend(t);
     setText("");
   };
-  const last = events[0];
   return (
     <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 flex flex-col gap-2">
+      <div className="text-sm text-zinc-300">Tell the hospital what&apos;s happening — Jev interprets it</div>
       <div className="flex flex-col sm:flex-row gap-2">
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
-          placeholder="Tell the building what's happening… e.g. “code stroke on 6”"
+          placeholder="e.g. “code stroke on 6”"
           className="flex-1 rounded-md bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm outline-none focus:border-emerald-500"
         />
         <button onClick={submit} className="rounded-md bg-zinc-100 text-zinc-900 px-4 py-2 text-sm font-medium">
-          Send event
+          Send
         </button>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {PRESETS.map((p) => (
           <button
             key={p}
@@ -208,162 +287,98 @@ function ChaosBox({
             {p}
           </button>
         ))}
+        {last && (
+          <span className="ml-auto text-sm">
+            <span className="text-zinc-400">“{last.text}” → </span>
+            {last.error ? (
+              <span className="text-red-400">Jev unavailable</span>
+            ) : last.interp ? (
+              <span className="text-emerald-300">
+                {EVENT_LABEL[last.interp.type]}
+                {last.interp.car !== null && ` · Car ${"ABCD"[last.interp.car]}`}
+                {last.interp.floor !== null && last.interp.car === null && ` · floor ${last.interp.floor}`}
+                <span className="text-zinc-500"> · {last.interp.latencyMs.toFixed(0)} ms</span>
+              </span>
+            ) : (
+              <span className="text-zinc-500">Jev is reading…</span>
+            )}
+          </span>
+        )}
       </div>
-      {last && (
-        <div className="text-xs text-zinc-400 font-mono">
-          [{clock(last.at)}] “{last.text}” →{" "}
-          {last.error ? (
-            <span className="text-red-400">interpreter error</span>
-          ) : last.interp ? (
-            <span className="text-emerald-300">
-              {last.interp.type} ({last.interp.typeConfidence.toFixed(2)})
-              {last.interp.floor !== null && ` · floor ${last.interp.floor}`}
-              {last.interp.car !== null && ` · car ${"ABCD"[last.interp.car]}`} · Jev {last.interp.latencyMs.toFixed(0)}ms
-            </span>
-          ) : (
-            <span>interpreting…</span>
-          )}
-        </div>
-      )}
     </section>
   );
 }
 
-const ROWS: { key: keyof Metrics; label: string; unit: string; lowerIsBetter: boolean; headline?: boolean }[] = [
-  { key: "priorityWeightedWait", label: "Priority-weighted wait", unit: "s", lowerIsBetter: true, headline: true },
-  { key: "statWait", label: "STAT wait", unit: "s", lowerIsBetter: true },
-  { key: "bedWait", label: "Bed transport wait", unit: "s", lowerIsBetter: true },
-  { key: "maxWait", label: "Worst wait", unit: "s", lowerIsBetter: true },
-  { key: "avgWait", label: "Average wait", unit: "s", lowerIsBetter: true },
-  { key: "wastedTrips", label: "Wasted trips", unit: "", lowerIsBetter: true },
-  { key: "violations", label: "Infection / discretion breaches", unit: "", lowerIsBetter: true },
-];
-
-function Scoreboard({ baseline, jev }: { baseline: Metrics; jev: Metrics }) {
-  return (
-    <section className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-      {ROWS.map((r) => {
-        const b = baseline[r.key];
-        const j = jev[r.key];
-        const delta = b > 0 ? ((j - b) / b) * 100 : 0;
-        const better = r.lowerIsBetter ? j < b : j > b;
-        const same = Math.abs(j - b) < 1e-9;
-        return (
-          <div
-            key={r.key}
-            className={`rounded-xl border p-3 ${r.headline ? "border-emerald-700 bg-emerald-950/40" : "border-zinc-800 bg-zinc-900/60"}`}
-          >
-            <div className="text-[11px] uppercase tracking-wide text-zinc-400">{r.label}</div>
-            <div className="mt-1 flex items-baseline gap-2 font-mono tabular-nums">
-              <span className="text-xl text-zinc-100">
-                {fmt(j)}
-                {r.unit}
-              </span>
-              <span className="text-xs text-zinc-500">
-                vs {fmt(b)}
-                {r.unit}
-              </span>
-            </div>
-            <div className={`text-xs font-mono ${same ? "text-zinc-500" : better ? "text-emerald-400" : "text-red-400"}`}>
-              {same || b === 0 ? "—" : `${delta > 0 ? "+" : ""}${delta.toFixed(0)}%`} Jev vs baseline
-            </div>
-          </div>
-        );
-      })}
-    </section>
-  );
-}
-
-const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
-
-function Panel({
+function Feed({
   title,
-  subtitle,
-  column,
-  metrics,
-  accent,
+  empty,
+  items,
+  render,
 }: {
   title: string;
-  subtitle: string;
-  column: Column;
-  metrics: Metrics;
-  accent?: boolean;
+  empty: string;
+  items: Decision[];
+  render: (d: Decision) => React.ReactNode;
 }) {
   return (
-    <section
-      className={`rounded-xl border p-3 flex flex-col gap-3 ${accent ? "border-emerald-800 bg-emerald-950/20" : "border-zinc-800 bg-zinc-900/40"}`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h2 className="font-semibold">{title}</h2>
-          <p className="text-xs text-zinc-400">{subtitle}</p>
-        </div>
-        <div className="text-right text-xs font-mono text-zinc-400 tabular-nums">
-          <div>
-            {metrics.delivered}/{metrics.requests} delivered
-          </div>
-          {column.mode !== "baseline" && (
-            <div>
-              Jev p50 {metrics.latencyP50.toFixed(0)}ms · p95 {metrics.latencyP95.toFixed(0)}ms · $
-              {(metrics.inputTokens * JEV_PRICE_PER_TOKEN).toFixed(4)}
-              {metrics.flagged > 0 && <span className="text-amber-400"> · ⚑ {metrics.flagged} flagged</span>}
-            </div>
-          )}
-        </div>
-      </div>
-      <Building column={column} />
-      <DecisionLog log={column.log} />
-    </section>
+    <div>
+      <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">{title}</div>
+      <ol className="h-36 overflow-hidden flex flex-col gap-1.5 text-sm">
+        {items.length === 0 && <li className="text-zinc-500">{empty}</li>}
+        {items.map((d, i) => (
+          <li key={`${d.at}-${i}`} className="truncate">
+            {render(d)}
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
-const KIND_STYLE: Record<Decision["kind"], string> = {
-  assign: "text-zinc-300",
-  bump: "text-amber-300",
-  wasted: "text-red-400",
-  violation: "text-red-400",
-  event: "text-emerald-300",
-  flag: "text-amber-300",
-};
-
-function DecisionLog({ log }: { log: Decision[] }) {
+// Decision text is `Car X → floor N for "note"`; show it as note → Jev's reading → car.
+function JevRead({ d }: { d: Decision }) {
+  const m = d.text.match(/^(Car [A-D]) → floor \d+ for "(.*)"$/);
+  if (!m) return <span className="text-zinc-300">{d.text}</span>;
+  const [, car, note] = m;
   return (
-    <ol className="h-56 overflow-y-auto rounded-lg bg-zinc-950/70 p-2 text-xs font-mono flex flex-col gap-1">
-      {log.length === 0 && <li className="text-zinc-500">Decisions appear here.</li>}
-      {log.slice(0, 40).map((d, i) => (
-        <li key={`${d.at}-${i}`} className={KIND_STYLE[d.kind]}>
-          <span className="text-zinc-500">{clock(d.at)} </span>
-          {d.kind === "wasted" && "✗ "}
-          {d.kind === "violation" && "⚠ "}
-          {d.text}
-          {d.tags && d.tags.length > 0 && (
-            <span className="ml-1">
-              {d.tags.map((t) => (
-                <span key={t} className="ml-1 rounded bg-zinc-800 px-1 py-px text-[10px] text-zinc-300">
-                  {t}
-                </span>
-              ))}
-            </span>
-          )}
-        </li>
-      ))}
-    </ol>
+    <span className="flex items-center gap-2 min-w-0">
+      <span className="truncate text-zinc-200">“{note}”</span>
+      <span className="shrink-0 flex gap-1">
+        {d.tags?.map((t) => (
+          <span
+            key={t}
+            className={`rounded px-1.5 py-0.5 text-[11px] ${
+              t === "STAT" ? "bg-red-500/20 text-red-300" : t === "own car" ? "bg-zinc-100/10 text-zinc-100" : "bg-zinc-800 text-zinc-300"
+            }`}
+          >
+            {t}
+          </span>
+        ))}
+      </span>
+      <span className="shrink-0 text-zinc-400">→ {car}</span>
+      {d.latencyMs !== undefined && <span className="shrink-0 text-zinc-600 text-xs">{d.latencyMs.toFixed(0)} ms</span>}
+    </span>
   );
 }
 
 function Legend() {
+  const labels: Record<keyof typeof PRIORITY_COLOR, string> = {
+    stat: "Emergency",
+    urgent: "Urgent",
+    routine: "Staff / supplies",
+    visitor: "Visitor",
+  };
   return (
-    <footer className="flex flex-wrap gap-4 text-xs text-zinc-400">
+    <footer className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-zinc-400">
+      <span>Dots are people waiting. Colors show their real urgency; you can see it, the left side can&apos;t. Cars take the color of their most urgent rider:</span>
       {(Object.keys(PRIORITY_COLOR) as (keyof typeof PRIORITY_COLOR)[]).map((k) => (
         <span key={k} className="flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: PRIORITY_COLOR[k] }} />
-          {k}
+          {labels[k]}
         </span>
       ))}
-      <span>○ being interpreted</span>
-      <span>white outline: exclusive car</span>
-      <span className="text-yellow-400">dashed yellow: faulty doors</span>
-      <span className="text-red-400">dashed red: car held for emergency</span>
+      <span>White outline: car reserved for one patient</span>
+      <span className="text-yellow-400">Dashed yellow: faulty doors</span>
     </footer>
   );
 }

@@ -46,7 +46,7 @@ async function main() {
   const events = new Map<string, EventInterpretation>();
   for (const [, text] of EVENTS) events.set(text, await interpretEvent(text));
 
-  const keys: (keyof Metrics)[] = ["priorityWeightedWait", "statWait", "bedWait", "avgWait", "maxWait", "wastedTrips", "violations"];
+  const keys: (keyof Metrics)[] = ["priorityWeightedWait", "statWait", "bedWait", "avgWait", "maxWait", "wastedTrips"];
   const sums = { b: {} as Record<string, number>, j: {} as Record<string, number> };
   let pwWins = 0;
   for (let seed = SEED_START; seed < SEED_START + SEEDS; seed++) {

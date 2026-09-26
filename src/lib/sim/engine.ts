@@ -33,7 +33,6 @@ export class Column {
   passengers = new Map<number, Passenger>();
   log: Decision[] = [];
   wastedTrips = 0;
-  violations = 0;
   interpLatencies: number[] = [];
   inputTokens = 0;
   pendingInterps = 0;
@@ -75,13 +74,10 @@ export class Column {
         p.profile = profileFrom(interp);
         this.interpLatencies.push(interp.latencyMs);
         this.inputTokens += interp.inputTokens;
-        if (p.profile.flagged) {
-          this.push({ kind: "flag", text: `Flagged for dispatcher: "${p.note}"`, tags: p.profile.tags });
-        }
       })
       .catch(() => {
         // Interpreter unavailable: dispatch on what the baseline knows.
-        p.profile = { ...BASELINE_PROFILE, flagged: true, tags: ["interpreter failed → baseline"] };
+        p.profile = { ...BASELINE_PROFILE, tags: ["Jev unavailable"] };
       })
       .finally(() => {
         this.pendingInterps--;
@@ -176,6 +172,7 @@ export class Column {
       kind: "assign",
       text: `${carName(car.id)} → floor ${p.from} for "${p.note}"`,
       tags: this.smart ? prof.tags : undefined,
+      latencyMs: p.interp?.latencyMs,
     });
   }
 
@@ -195,15 +192,6 @@ export class Column {
     }
 
     if (this.loadUnits(car) + prof.units > CAR_CAPACITY) return no;
-    for (const o of occupants) {
-      const inf = o.profile!.infection;
-      if (
-        (inf === "sterile" && prof.infection === "soiled") ||
-        (inf === "soiled" && prof.infection === "sterile")
-      ) {
-        return no;
-      }
-    }
     return { ok: true, bump: [] };
   }
 
@@ -316,34 +304,11 @@ export class Column {
         this.push({ kind: "wasted", text: `${carName(car.id)} arrived too full: "${p.note}" left behind` });
         continue;
       }
-      this.checkViolation(car, p);
       car.riders.push(p.id);
       p.status = "riding";
       p.pickedAt = this.now;
     }
     car.doorTimer = DOOR_DWELL + (car.faulty ? FAULT_DWELL : 0);
-  }
-
-  // Infection-control and discretion breaches, judged on the truth.
-  private checkViolation(car: Car, p: Passenger) {
-    const riders = car.riders.map((id) => this.passengers.get(id)!);
-    if (riders.length === 0) return;
-    const clash = riders.find((o) => {
-      const a = o.truth;
-      const b = p.truth;
-      return (
-        a.infection === "isolation" ||
-        b.infection === "isolation" ||
-        (a.infection === "sterile" && b.infection === "soiled") ||
-        (a.infection === "soiled" && b.infection === "sterile") ||
-        a.discretion ||
-        b.discretion
-      );
-    });
-    if (clash) {
-      this.violations++;
-      this.push({ kind: "violation", text: `"${p.note}" shared ${carName(car.id)} with "${clash.note}"` });
-    }
   }
 
   private stops(car: Car, exclude?: Set<number>): number[] {
@@ -401,8 +366,6 @@ export class Column {
       statWait: avg(ps.filter((p) => p.truth.priority === "stat").map(wait)),
       bedWait: avg(ps.filter((p) => p.truth.load === "bed").map(wait)),
       wastedTrips: this.wastedTrips,
-      violations: this.violations,
-      flagged: ps.filter((p) => p.profile?.flagged).length,
       interpreting: this.pendingInterps,
       latencyP50: pct(0.5),
       latencyP95: pct(0.95),

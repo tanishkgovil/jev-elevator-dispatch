@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Switchboard",
+  title: "Jev Elevator Dispatch",
   description: "Hospital elevator dispatch that understands what's waiting, powered by Jev.",
 };
 

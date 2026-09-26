@@ -1,5 +1,5 @@
 import type { EventInterpretation } from "../jev/interpretEvent";
-import type { InfectionClass, Priority, RequestInterpretation } from "../jev/interpretRequest";
+import type { Priority, RequestInterpretation } from "../jev/interpretRequest";
 import type { Truth } from "./corpus";
 
 export type Mode = "baseline" | "jev" | "llm";
@@ -32,8 +32,6 @@ export interface Profile {
   priority: Priority;
   units: number;
   exclusive: boolean;
-  infection: InfectionClass;
-  flagged: boolean;
   tags: string[]; // human-readable, built from typed answers
 }
 
@@ -68,7 +66,8 @@ export interface Car {
 
 export interface Decision {
   at: number;
-  kind: "assign" | "bump" | "wasted" | "violation" | "event" | "flag";
+  kind: "assign" | "bump" | "wasted" | "event";
+  latencyMs?: number; // Jev latency for the request behind this decision
   text: string;
   tags?: string[];
 }

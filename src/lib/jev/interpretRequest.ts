@@ -4,7 +4,6 @@ import { jev } from "./client";
 
 export type Priority = "stat" | "urgent" | "routine" | "visitor";
 export type Load = "bed" | "wheelchair" | "cart" | "walking";
-export type InfectionClass = "sterile" | "soiled" | "isolation" | "none";
 
 export interface ElevatorRequest {
   from: number;
@@ -19,11 +18,7 @@ export interface RequestInterpretation {
   load: Load;
   loadConfidence: number;
   loadProbabilities: Record<Load, number>;
-  infection: InfectionClass;
-  infectionConfidence: number;
-  infectionProbabilities: Record<InfectionClass, number>;
   exclusiveCar: number; // probability 0–1
-  discretion: number; // probability 0–1
   latencyMs: number;
   inputTokens: number;
   model: string;
@@ -50,23 +45,8 @@ const QUESTIONS = {
     cart: "A cart or large equipment: supply, linen, meal, waste, or medical equipment cart.",
     walking: "Only people on foot, with at most small hand-carried items.",
   }),
-  infection: choice(
-    "Which infection-control category applies to the trip described in `request`?",
-    {
-      sterile:
-        "Clean or sterile items that must not be contaminated: sterile supplies, surgical instruments, clean linen, medications.",
-      soiled:
-        "Dirty or contaminated items: used linen, trash, biohazard waste, used instruments.",
-      isolation:
-        "A patient on isolation precautions (contact, droplet, or airborne), or with a contagious infection.",
-      none: "No infection-control concern, including lab specimens in sealed containers.",
-    },
-  ),
   exclusive_car: noul(
-    "The trip described in `request` needs an elevator car with no other passengers, because the load fills the car, the patient is critical or on isolation, or a team is responding to an emergency.",
-  ),
-  discretion: noul(
-    "The trip described in `request` involves a deceased patient or something else that should be kept out of view of visitors.",
+    "The trip described in `request` needs an elevator car with no other passengers, because the load fills the car, the patient is critical, or a team is responding to an emergency.",
   ),
 };
 
@@ -97,11 +77,7 @@ export async function interpretRequest(
     load: a.load.choice,
     loadConfidence: a.load.confidence,
     loadProbabilities: { ...a.load.probabilities },
-    infection: a.infection.choice,
-    infectionConfidence: a.infection.confidence,
-    infectionProbabilities: { ...a.infection.probabilities },
     exclusiveCar: a.exclusive_car.noul,
-    discretion: a.discretion.noul,
     latencyMs,
     inputTokens: res.usage.input_tokens,
     model: res.model,
