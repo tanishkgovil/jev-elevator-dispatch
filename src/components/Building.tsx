@@ -14,7 +14,7 @@ export const PRIORITY_COLOR: Record<Priority, string> = {
 
 const FLOOR_H = 26;
 const LABEL_W = 118;
-const QUEUE_W = 92;
+const QUEUE_W = 230;
 const SHAFT_W = 40;
 const SHAFT_GAP = 8;
 const WIDTH = LABEL_W + QUEUE_W + CAR_COUNT * (SHAFT_W + SHAFT_GAP);
@@ -39,7 +39,7 @@ export function Building({ column }: { column: Column }) {
       {FLOORS.map((f) => (
         <g key={f.floor}>
           <rect x={0} y={yOf(f.floor)} width={WIDTH} height={FLOOR_H} fill={f.floor % 2 ? "#18181b" : "#1c1c20"} />
-          <text x={6} y={yOf(f.floor) + FLOOR_H / 2 + 4} fontSize={10} fill="#a1a1aa">
+          <text x={6} y={yOf(f.floor) + FLOOR_H / 2 + 4} fontSize={11} fill="#a1a1aa">
             {f.short}
           </text>
         </g>

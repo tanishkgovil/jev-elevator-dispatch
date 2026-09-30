@@ -113,57 +113,55 @@ export function Dashboard() {
   const mj = jev.metrics();
 
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-4 py-5 flex flex-col gap-4">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Elevator Sense</h1>
-          <p className="text-sm text-zinc-400">
-            Hospital elevators with and without Jev: same hospital, same requests, same dispatch algorithm. On the
-            right, Jev reads each request first.
-          </p>
-        </div>
+    <div className="mx-auto w-full max-w-[1280px] px-4 py-4 flex flex-col gap-3">
+      <header className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <h1 className="text-3xl font-semibold tracking-tight">Elevator Sense</h1>
+            <p className="text-base text-zinc-400">Same hospital, same requests, same algorithm. One difference:</p>
+          </div>
         <div className="flex items-center gap-2">
-          <span className="font-mono text-lg tabular-nums text-zinc-300 mr-1" title="Simulated time">
-            {clock(world.now)}
-          </span>
-          <button
-            onClick={() => setRunning((r) => !r)}
-            className="rounded-md bg-emerald-600 hover:bg-emerald-500 px-4 py-1.5 text-sm font-medium"
-          >
-            {running ? "Pause" : world.now > 0 ? "Resume" : "Start"}
-          </button>
-          <button onClick={reset} className="rounded-md bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 text-sm">
-            Reset
-          </button>
-          <select
-            value={speed}
-            onChange={(e) => setSpeed(Number(e.target.value))}
-            className="rounded-md bg-zinc-800 px-2 py-1.5 text-sm"
-            aria-label="Simulation speed"
-          >
-            {[5, 10, 20].map((s) => (
-              <option key={s} value={s}>
-                {s}× speed
-              </option>
-            ))}
-          </select>
+            <span className="font-mono text-lg tabular-nums text-zinc-300 mr-1" title="Simulated time">
+              {clock(world.now)}
+            </span>
+            <button
+              onClick={() => setRunning((r) => !r)}
+              className="rounded-md bg-emerald-600 hover:bg-emerald-500 px-4 py-1.5 text-sm font-medium"
+            >
+              {running ? "Pause" : world.now > 0 ? "Resume" : "Start"}
+            </button>
+            <button onClick={reset} className="rounded-md bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 text-sm">
+              Reset
+            </button>
+            <select
+              value={speed}
+              onChange={(e) => setSpeed(Number(e.target.value))}
+              className="rounded-md bg-zinc-800 px-2 py-1.5 text-sm"
+              aria-label="Simulation speed"
+            >
+              {[5, 10, 20].map((s) => (
+                <option key={s} value={s}>
+                  {s}× speed
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
+        <HowItWorks latency={mj.latencyP50} />
       </header>
 
       <Scoreboard baseline={mb} jev={mj} />
 
-      <EventBox onSend={sendEvent} last={lastEvent} />
-
       <Legend />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 flex flex-col gap-3">
-          <PanelHeader title="Without Jev" subtitle="Only knows which floor to go to" />
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3 flex flex-col gap-2">
+          <PanelHeader title="Without Jev" subtitle="Sees floor numbers only, so every dot looks the same to it" />
           <Building column={baseline} />
           <Feed
             title="Problems"
             empty="None yet"
-            items={baseline.log.filter((d) => d.kind === "wasted").slice(0, 5)}
+            items={baseline.log.filter((d) => d.kind === "wasted").slice(0, 3)}
             render={(d) => (
               <span className="text-red-300">
                 ✗ {d.text.replace(/ arrived too full: "(.*)" left behind/, " arrived too full — \"$1\" left behind")}
@@ -172,24 +170,42 @@ export function Dashboard() {
           />
         </section>
 
-        <section className="rounded-xl border border-emerald-800 bg-emerald-950/20 p-4 flex flex-col gap-3">
+        <section className="rounded-xl border border-emerald-800 bg-emerald-950/20 p-3 flex flex-col gap-2">
           <PanelHeader
             title="With Jev"
-            subtitle={
-              mj.latencyP50 > 0
-                ? `Jev reads every request · ~${mj.latencyP50.toFixed(0)} ms each`
-                : "Jev reads every request"
-            }
+            subtitle="Jev reads every request first"
           />
           <Building column={jev} />
           <Feed
             title="What Jev read"
             empty="Press Start"
-            items={jev.log.filter((d) => d.kind === "assign").slice(0, 5)}
+            items={jev.log.filter((d) => d.kind === "assign").slice(0, 3)}
             render={(d) => <JevRead d={d} />}
           />
         </section>
       </div>
+
+      <EventBox onSend={sendEvent} last={lastEvent} />
+    </div>
+  );
+}
+
+// Request text → Jev → typed answers → the same dispatcher, as one line.
+function HowItWorks({ latency }: { latency: number }) {
+  const step = "rounded-md px-2.5 py-1 text-sm";
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-zinc-500">
+      <span className={`${step} bg-zinc-800 text-zinc-200`}>“Bed transport ER → ICU, pt intubated”</span>
+      <span>→</span>
+      <span className={`${step} bg-emerald-600/20 text-emerald-300 font-medium`}>
+        Jev reads it{latency > 0 ? ` · ${latency.toFixed(0)} ms` : ""}
+      </span>
+      <span>→</span>
+      <span className={`${step} bg-zinc-800 text-zinc-200`}>
+        <span className="text-red-300">STAT</span> · bed · needs own car
+      </span>
+      <span>→</span>
+      <span className={`${step} bg-zinc-800 text-zinc-200`}>same dispatcher picks the elevator</span>
     </div>
   );
 }
@@ -203,11 +219,11 @@ function PanelHeader({ title, subtitle }: { title: string; subtitle: string }) {
   );
 }
 
-const CARDS: { key: keyof Metrics; label: string; unit: string }[] = [
-  { key: "statWait", label: "Emergency patients wait", unit: "s" },
-  { key: "bedWait", label: "Patient beds wait", unit: "s" },
-  { key: "avgWait", label: "Everyone waits (avg)", unit: "s" },
-  { key: "wastedTrips", label: "Trips where the bed didn't fit", unit: "" },
+const CARDS: { key: keyof Metrics; label: string; unit: string; noun: string }[] = [
+  { key: "statWait", label: "Emergency patients", unit: "s", noun: "waiting" },
+  { key: "bedWait", label: "Patient beds", unit: "s", noun: "waiting" },
+  { key: "avgWait", label: "Everyone", unit: "s", noun: "waiting" },
+  { key: "wastedTrips", label: "Beds that didn't fit in the car", unit: "", noun: "fewer" },
 ];
 
 function Scoreboard({ baseline, jev }: { baseline: Metrics; jev: Metrics }) {
@@ -218,36 +234,31 @@ function Scoreboard({ baseline, jev }: { baseline: Metrics; jev: Metrics }) {
         const b = baseline[c.key];
         const j = jev[c.key];
         const change = b > 0 ? Math.round(((b - j) / b) * 100) : null;
+        const better = change !== null && change >= 0;
+        const headline =
+          !settled || change === null
+            ? "…"
+            : c.noun === "fewer"
+              ? `${Math.abs(change)}% ${better ? "fewer" : "more"}`
+              : `${Math.abs(change)}% ${better ? "less" : "more"} ${c.noun}`;
         return (
-          <div key={c.key} className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3">
-            <div className="text-sm text-zinc-300">{c.label}</div>
-            <div className="mt-2 grid grid-cols-2 gap-2 font-mono tabular-nums">
-              <div>
-                <div className="text-[11px] text-zinc-500">Without Jev</div>
-                <div className="text-xl text-zinc-300">
-                  {Math.round(b)}
-                  {c.unit}
-                </div>
-              </div>
-              <div>
-                <div className="text-[11px] text-emerald-400">With Jev</div>
-                <div className="text-xl text-zinc-50">
-                  {Math.round(j)}
-                  {c.unit}
-                </div>
-              </div>
+          <div key={c.key} className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
+            <div className="text-sm text-zinc-400">{c.label}</div>
+            <div
+              className={`mt-1 text-2xl font-semibold ${!settled || change === null ? "text-zinc-600" : better ? "text-emerald-400" : "text-red-400"}`}
+            >
+              {headline}
             </div>
-            {settled ? (
-              <div
-                className={`mt-1 text-xs ${change === null ? "text-zinc-500" : change >= 0 ? "text-emerald-400" : "text-red-400"}`}
-              >
-                {change === null ? "—" : change >= 0 ? `${change}% less with Jev` : `${-change}% more with Jev`}
-              </div>
-            ) : (
-              <div className="mt-1 text-xs text-zinc-500">
-                Gathering data… {jev.requests}/{MIN_REQUESTS} requests
-              </div>
-            )}
+            <div className="mt-1 font-mono text-sm tabular-nums text-zinc-500">
+              {settled ? (
+                <>
+                  without Jev {Math.round(b)}
+                  {c.unit} → with Jev <span className="text-zinc-200">{Math.round(j)}{c.unit}</span>
+                </>
+              ) : (
+                `gathering data… ${jev.requests}/${MIN_REQUESTS} requests`
+              )}
+            </div>
           </div>
         );
       })}
@@ -324,7 +335,7 @@ function Feed({
   return (
     <div>
       <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">{title}</div>
-      <ol className="h-36 overflow-hidden flex flex-col gap-1.5 text-sm">
+      <ol className="h-[84px] overflow-hidden flex flex-col gap-1.5 text-sm">
         {items.length === 0 && <li className="text-zinc-500">{empty}</li>}
         {items.map((d, i) => (
           <li key={`${d.at}-${i}`} className="truncate">
@@ -370,7 +381,7 @@ function Legend() {
     visitor: "Visitor",
   };
   return (
-    <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-zinc-300">
+    <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-2 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-zinc-300">
       <div className="flex items-center gap-3">
         <span className="text-zinc-500">Person waiting:</span>
         {(Object.keys(PRIORITY_COLOR) as (keyof typeof PRIORITY_COLOR)[]).map((k) => (
@@ -386,9 +397,6 @@ function Legend() {
         <CarIcon fill="#3f3f46" outline="#fafafa" label="Reserved for one patient" />
         <CarIcon fill="#3f3f46" outline="#facc15" dashed label="Faulty doors" />
       </div>
-      <span className="text-xs text-zinc-500 basis-full">
-        Only you can see the colors. The left side treats every dot the same; the right side learns them from Jev.
-      </span>
     </section>
   );
 }
