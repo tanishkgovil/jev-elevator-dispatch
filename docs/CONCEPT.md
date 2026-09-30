@@ -85,7 +85,7 @@ Cut to keep the MVP explainable:
 - The request phrasings and question definitions share an author, so accuracy on real hospital language is untested.
 - Simulated physics and traffic are assumptions.
 - The baseline is a textbook ETA-style dispatcher, not a commercial controller.
-- The live demo spends Jev credits for every visitor session (under $0.01 per 20 simulated minutes).
+- Running the demo spends Jev credits (under $0.01 per 20 simulated minutes).
 
 ## Beyond elevators
 

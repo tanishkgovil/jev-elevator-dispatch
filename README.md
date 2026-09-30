@@ -2,7 +2,7 @@
 
 **We're very good at optimizing numbers. What we can't do is optimize for meaning, because meaning never makes it into the numbers.** Elevator Sense tests whether [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev) (TypeSafe AI's fast, structured-decision model) can supply that missing input. An experiment built at JEVATHON (Jev Hackathon SF, Sept 26 2026).
 
-**Live demo:** https://jev-elevator-dispatch.vercel.app
+**Try it:** the demo runs locally with your own TypeSafe API key. See [Run it locally](#run-it-locally), which takes about two minutes.
 
 ## The idea
 
